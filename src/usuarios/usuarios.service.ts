@@ -13,4 +13,8 @@ export class UsuariosService {
   findByDocumento(documento: string): Promise<Usuario | null> {
     return this.usuariosRepository.findOneBy({ documento });
   }
+  
+  findById(id: number): Promise<Usuario | null> {
+    return this.usuariosRepository.findOneBy({ id });
+  }
 }
