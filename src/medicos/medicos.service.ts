@@ -15,7 +15,7 @@ export class MedicosService {
   constructor(
     @InjectRepository(Medico)
     private readonly medicosRepository: Repository<Medico>,
-  ) {}
+  ) { }
 
   async listar(): Promise<MedicoResponseDto[]> {
     const medicos = await this.medicosRepository.find({
@@ -28,6 +28,8 @@ export class MedicosService {
       const dto = new MedicoResponseDto();
       dto.id = m.id;
       dto.id_usuario = m.usuario.id;
+      dto.nombres = m.usuario.nombres;
+      dto.apellidos = m.usuario.apellidos;
       dto.matricula = m.matricula;
       dto.valor_consulta = m.valor_consulta;
       lista.push(dto);
@@ -56,6 +58,8 @@ export class MedicosService {
     const respuesta = new MedicoResponseDto();
     respuesta.id = medico.id;
     respuesta.id_usuario = medico.usuario.id;
+    respuesta.nombres = medico.usuario.nombres;
+    respuesta.apellidos = medico.usuario.apellidos;
     respuesta.matricula = medico.matricula;
     respuesta.valor_consulta = medico.valor_consulta;
     return respuesta;
