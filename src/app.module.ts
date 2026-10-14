@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { UsuariosModule } from './usuarios/usuarios.module';
 import { SeedModule } from './seed/seed.module';
 import { AuthModule } from './auth/auth.module';
+import { MedicosModule } from './medicos/medicos.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { AuthModule } from './auth/auth.module';
     }),
     UsuariosModule,
     SeedModule,
-    AuthModule, 
+    AuthModule,
+    MedicosModule, 
   ],
   controllers: [AppController],
   providers: [AppService],
