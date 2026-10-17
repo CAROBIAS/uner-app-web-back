@@ -8,7 +8,6 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
-
 @Module({
   imports: [
     UsuariosModule,
@@ -37,6 +36,6 @@ import { RolesGuard } from './guards/roles.guard';
     AuthService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard }
-],
+  ],
 })
 export class AuthModule {}

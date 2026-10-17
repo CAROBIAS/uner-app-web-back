@@ -7,6 +7,7 @@ import { UsuariosModule } from './usuarios/usuarios.module';
 import { SeedModule } from './seed/seed.module';
 import { AuthModule } from './auth/auth.module';
 import { MedicosModule } from './medicos/medicos.module';
+import { ReservasModule } from './reservas/reservas.module';
 
 @Module({
   imports: [
@@ -24,13 +25,16 @@ import { MedicosModule } from './medicos/medicos.module';
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
         synchronize: config.get<string>('DB_SYNC') === 'true',
-        ssl: config.get<string>('DB_SSL') === 'true',
+        ssl: {
+          rejectUnauthorized: false,
+        },
       }),
     }),
     UsuariosModule,
     SeedModule,
     AuthModule,
     MedicosModule, 
+    ReservasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
