@@ -143,15 +143,24 @@ LOG [InstanceLoader] TypeOrmCoreModule dependencies initialized
 LOG [InstanceLoader] UsuariosModule dependencies initialized
 LOG [InstanceLoader] SeedModule dependencies initialized
 LOG [InstanceLoader] AuthModule dependencies initialized
+LOG [InstanceLoader] MedicosModule dependencies initialized
+LOG [InstanceLoader] ReservasModule dependencies initialized
 LOG [RouterExplorer] Mapped {/api, GET} route
+LOG [RouterExplorer] Mapped {/api/usuarios, GET} route
 LOG [RouterExplorer] Mapped {/api/auth/login, POST} route
 LOG [RouterExplorer] Mapped {/api/auth/perfil, GET} route
+LOG [RouterExplorer] Mapped {/api/medicos, GET} route
+LOG [RouterExplorer] Mapped {/api/medicos/:id/valor-consulta, PATCH} route
+LOG [RouterExplorer] Mapped {/api/reservas, POST} route
+LOG [RouterExplorer] Mapped {/api/reservas, GET} route
+LOG [RouterExplorer] Mapped {/api/reservas/:id/cancelar, PATCH} route
 LOG [SeedService] Usuarios: 21 insertados, 0 ya existían
+LOG [SeedService] Medicos: 5 insertados, 0 ya existían
 LOG [NestApplication] Nest application successfully started
 Aplicación corriendo en: http://localhost:3000
 ```
 
-- La **primera vez**, el seed dice `21 insertados, 0 ya existían`. Las siguientes veces dice `0 insertados, 21 ya existían`: **es lo correcto**, no duplica datos.
+- La **primera vez**, el seed dice `21 insertados, 0 ya existían` y `5 insertados, 0 ya existían`. Las siguientes veces dice `0 insertados, 21 ya existían` y `0 insertados, 5 ya existían`: **es lo correcto**, no duplica datos.
 - La primera conexión a Neon puede tardar unos segundos de más si la base estaba suspendida.
 - `start:dev` queda **mirando los archivos**: cada vez que guardás un cambio, se reinicia solo (`File change detected...`).
 - Para detenerlo: `Ctrl + C` y, si pregunta *¿Desea terminar el trabajo por lotes (S/N)?*, respondé `S`.
@@ -184,9 +193,32 @@ Content-Type: application/json
 ### Perfil (ejecutar antes el Login)
 GET {{baseUrl}}/auth/perfil
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### Login como administrador
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "documento": "28456123",
+  "clave": "asd123"
+}
+
+### Buscar usuario por documento (ejecutar antes el Login como administrador)
+GET {{baseUrl}}/usuarios?documento=40123456
+Authorization: Bearer {{loginAdmin.response.body.accessToken}}
 ```
 
-Hacé clic en **Send Request** sobre cada pedido. **Resultado esperado:** `200 OK` en los dos, con los datos de *Rodríguez Sofía* (`"rol": "PACIENTE"`).
+Hacé clic en **Send Request** sobre cada pedido. **Resultado esperado:** `200 OK` en todos. *Perfil* y *Buscar usuario por documento* devuelven los datos de *Rodríguez Sofía* (`"rol": "PACIENTE"`).
+
+Si preferís la consola de Windows (CMD), `curl` viene incluido desde Windows 10:
+
+```
+curl -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d "{\"documento\":\"28456123\",\"clave\":\"asd123\"}"
+curl "http://localhost:3000/api/usuarios?documento=40123456" -H "Authorization: Bearer TU_TOKEN"
+```
+
+En CMD, las comillas dentro del JSON van como `\"`, y la URL con `?` va entre comillas.
 
 > El archivo de pruebas va **fuera del repo** para que no se suba por error.
 
@@ -207,6 +239,7 @@ Hacé clic en **Send Request** sobre cada pedido. **Resultado esperado:** `200 O
 | `DB_SEED` | `true` | Si es `true`, al arrancar carga los usuarios de prueba que falten (no duplica ni modifica los existentes) | En `false` no carga nada. Sirve para probar con la base vacía |
 | `JWT_SECRET` | *(64 caracteres generados)* | Clave con la que se firman los tokens de sesión | **Vacío: el backend no arranca** y muestra `Falta configurar JWT_SECRET en el archivo .env`. Si es corto o conocido, cualquiera podría fabricar tokens válidos |
 | `JWT_EXPIRES_IN` | `1h` | Duración del token (`30m`, `1h`, `8h`...) | Formato inválido: el login falla al generar el token |
+| `SWAGGER_HABILITADO` | `true` | Si es `true`, publica la documentación interactiva de la API en `http://localhost:3000/api/docs` | En `false` (o si falta) no se publica la documentación; la API funciona igual |
 
 > Los valores booleanos van en minúsculas y sin comillas: `true` o `false`. Cualquier otro valor (`True`, `"true"`, `1`) se interpreta como **desactivado**.
 
@@ -256,6 +289,20 @@ El login se hace con el **documento**.
 
 Los emails siguen el formato `apellido_nombre@ejemplo.com`, en minúsculas y sin tildes (por ejemplo, `gomez_laura@ejemplo.com`).
 
+### Datos de médicos (tabla `medicos`)
+
+El seed también carga la tabla `medicos` para los médicos **activos**, vinculada al usuario por documento:
+
+| Documento | Médico | Matrícula | Valor de la consulta |
+|---|---|---|---|
+| 24567890 | Fernández Martín | 10001 | 15000 |
+| 27345678 | López Carolina | 10002 | 18000 |
+| 29876543 | Díaz Javier | 10003 | 20000 |
+| 30123987 | Romero Natalia | 10004 | 17000 |
+| 26789012 | Sosa Gustavo | 10005 | 16000 |
+
+> ⚠️ El **id del médico** (`medicos.id`) **no es** el id de su usuario (`usuarios.id`). Los endpoints de reservas y de valor de consulta usan el **id del médico**, que se obtiene con `GET /api/medicos`.
+
 ### Consultas útiles (SQL Editor de Neon o cliente de Postgres)
 
 Cambiar el estado de un usuario, para probar el rechazo de usuarios dados de baja:
@@ -279,11 +326,19 @@ TRUNCATE usuarios RESTART IDENTITY CASCADE;
 
 Todas las rutas tienen el prefijo `/api`.
 
-| Método | Ruta | Requiere token | Descripción |
+| Método | Ruta | Roles | Descripción |
 |---|---|---|---|
-| `GET` | `/api` | No | Chequeo rápido de que el backend responde (`Hello World!`) |
-| `POST` | `/api/auth/login` | No | Inicia sesión y devuelve el token |
-| `GET` | `/api/auth/perfil` | Sí | Devuelve los datos del usuario del token |
+| `GET` | `/api` | Público (sin token) | Chequeo rápido de que el backend responde (`Hello World!`) |
+| `POST` | `/api/auth/login` | Público (sin token) | Inicia sesión y devuelve el token |
+| `GET` | `/api/auth/perfil` | Cualquiera logueado | Devuelve los datos del usuario del token |
+| `GET` | `/api/usuarios?documento=...` | `ADMINISTRADOR`, `MEDICO` | Busca un usuario por número de documento |
+| `GET` | `/api/medicos` | Cualquiera logueado | Lista los médicos con matrícula y valor de la consulta |
+| `PATCH` | `/api/medicos/:id/valor-consulta` | `ADMINISTRADOR` | Modifica el valor de la consulta de un médico |
+| `POST` | `/api/reservas` | `PACIENTE` | Reserva un turno para el paciente logueado |
+| `GET` | `/api/reservas` | Cualquiera logueado | Lista reservas (el paciente ve solo las suyas) |
+| `PATCH` | `/api/reservas/:id/cancelar` | `PACIENTE`, `ADMINISTRADOR` | Cancela una reserva |
+
+Con `SWAGGER_HABILITADO=true`, la documentación interactiva está en `http://localhost:3000/api/docs`. Para probar endpoints protegidos desde ahí, usá el botón **Authorize** y pegá el `accessToken` del login.
 
 ### `POST /api/auth/login`
 
@@ -334,6 +389,198 @@ Authorization: Bearer <accessToken>
 | `401` | `Token inválido o vencido` | El token fue alterado, se firmó con otro `JWT_SECRET` o pasó su duración (`JWT_EXPIRES_IN`) |
 | `401` | `Sesión no válida` | Solo en `/perfil`: el usuario ya no existe o pasó a `BAJA` después de iniciar sesión |
 | `403` | `No tiene permisos para esta acción` | El endpoint está restringido a otros roles |
+
+### `GET /api/usuarios?documento=...`
+
+Busca un usuario por número de documento. Pensado para tareas administrativas (por ejemplo, identificar al paciente antes de operar sobre sus turnos).
+
+**Roles:** `ADMINISTRADOR`, `MEDICO`.
+
+**Parámetros (query):**
+
+| Parámetro | Obligatorio | Formato |
+|---|---|---|
+| `documento` | Sí | Solo números, sin puntos ni espacios (ej.: `40123456`) |
+
+**Ejemplo:** `GET /api/usuarios?documento=40123456`
+
+**Respuesta `200 OK`** (nunca incluye la clave):
+
+```json
+{
+  "id": 11,
+  "documento": "40123456",
+  "apellidos": "Rodríguez",
+  "nombres": "Sofía",
+  "email": "rodriguez_sofia@ejemplo.com",
+  "estado": "ACTIVO",
+  "rol": "PACIENTE"
+}
+```
+
+- `estado`: `ACTIVO` o `BAJA`. El usuario se devuelve aunque esté en `BAJA`; es responsabilidad de quien consume el endpoint decidir qué hacer en ese caso.
+- `rol`: `ADMINISTRADOR`, `MEDICO` o `PACIENTE`.
+
+**Errores** (además de los de token):
+
+| Código | Mensaje | Cuándo |
+|---|---|---|
+| `400` | `["El documento es obligatorio"]` | Falta el parámetro `documento` o viene vacío |
+| `400` | `["El documento debe contener solo números"]` | El documento tiene letras, puntos, espacios, etc. |
+| `400` | `["property xxx should not exist"]` | Se envió otro parámetro además de `documento` |
+| `404` | `Usuario no encontrado` | No existe un usuario con ese documento |
+
+### `GET /api/medicos`
+
+Lista todos los médicos de la tabla `medicos`, ordenados por id.
+
+**Roles:** cualquier usuario logueado.
+
+**Respuesta `200 OK`:**
+
+```json
+[
+  {
+    "id": 1,
+    "id_usuario": 5,
+    "nombres": "Martín",
+    "apellidos": "Fernández",
+    "matricula": 10001,
+    "valor_consulta": 15000
+  }
+]
+```
+
+- `id`: id del **médico**. Es el que se usa en reservas y en `valor-consulta`.
+- `id_usuario`: id de su usuario en la tabla `usuarios`.
+
+### `PATCH /api/medicos/:id/valor-consulta`
+
+Modifica el valor de la consulta de un médico. Las reservas ya hechas **no cambian**: conservan el valor congelado al momento de reservar.
+
+**Roles:** `ADMINISTRADOR`.
+
+**Ejemplo:** `PATCH /api/medicos/1/valor-consulta`
+
+**Cuerpo:**
+
+```json
+{
+  "valor_consulta": 18000
+}
+```
+
+- `valor_consulta`: número entero, mínimo `1`.
+
+**Respuesta `200 OK`:** el médico actualizado, con el mismo formato que en `GET /api/medicos` (un solo objeto, no una lista).
+
+**Errores** (además de los de token y rol):
+
+| Código | Mensaje | Cuándo |
+|---|---|---|
+| `400` | Lista de errores de validación | `valor_consulta` falta, no es entero o es menor a `1`; el `:id` de la URL no es un número; o se envían campos de más |
+| `400` | `Medico dado de baja` | El usuario del médico está en `BAJA` |
+| `404` | `Medico no encontrado` | No existe un médico con ese id |
+
+### `POST /api/reservas`
+
+Reserva un turno. El paciente de la reserva es **el usuario logueado**.
+
+**Roles:** `PACIENTE`.
+
+**Cuerpo:**
+
+```json
+{
+  "id_medico": 1,
+  "fecha_hora": "2026-11-10T09:00:00"
+}
+```
+
+- `id_medico`: id del **médico** (de `GET /api/medicos`), número entero.
+- `fecha_hora`: fecha y hora en formato ISO 8601. Enviala **sin zona horaria** (sin `Z` ni `-03:00`), como en el ejemplo: las validaciones de horario usan la hora local del servidor.
+
+**Reglas que se validan:**
+
+- Solo de lunes a viernes.
+- Hora en punto (minutos y segundos en `0`), entre las `08:00` y las `15:00` inclusive (el último turno termina a las `16:00`).
+- La fecha tiene que estar entre hoy y los 29 días corridos siguientes (un turno en el día 30 contado desde hoy se rechaza).
+- El médico tiene que existir y estar `ACTIVO`.
+- El médico no puede tener otra reserva no cancelada en el mismo horario.
+- Se guarda `valor_congelado` con el valor de la consulta del médico en ese momento.
+
+**Respuesta `201 Created`:**
+
+```json
+{
+  "id": 1,
+  "id_medico": 1,
+  "id_paciente": 11,
+  "fecha_hora": "2026-11-10T12:00:00.000Z",
+  "estado": "PENDIENTE",
+  "valor_congelado": 15000
+}
+```
+
+> `fecha_hora` vuelve en **UTC** (con `Z`). Con el servidor en hora argentina (UTC-3), un turno de las `09:00` vuelve como `12:00:00.000Z`. El frontend tiene que convertirla a hora local para mostrarla.
+
+**Errores** (además de los de token y rol):
+
+| Código | Mensaje | Cuándo |
+|---|---|---|
+| `400` | Lista de errores de validación | `id_medico` no es entero, `fecha_hora` no es ISO 8601, falta alguno o se envían campos de más |
+| `400` | `Solo se permiten reservas de lunes a viernes.` | La fecha cae sábado o domingo |
+| `400` | `Los turnos deben ser de una hora exacta entre las 08:00 y las 16:00 hs.` | No es hora en punto o está fuera de la franja |
+| `400` | `Las reservas solo se permiten desde hoy y hasta con 30 días corridos de antelación.` | Fecha anterior a hoy, o fuera del rango de días permitido |
+| `400` | `El médico ya cuenta con un turno reservado en este horario.` | Turno ocupado |
+| `404` | `Médico no encontrado o inactivo.` | El médico no existe o su usuario está en `BAJA` |
+
+### `GET /api/reservas`
+
+Lista reservas, ordenadas de la más reciente a la más antigua (por `fecha_hora`).
+
+**Roles:** cualquier usuario logueado.
+
+- `PACIENTE`: solo sus propias reservas.
+- `MEDICO` y `ADMINISTRADOR`: todas las reservas.
+
+**Respuesta `200 OK`:** una lista de reservas, con el mismo formato que la respuesta de `POST /api/reservas`.
+
+### `PATCH /api/reservas/:id/cancelar`
+
+Cancela una reserva. No lleva cuerpo.
+
+**Roles:** `PACIENTE`, `ADMINISTRADOR`.
+
+**Ejemplo:** `PATCH /api/reservas/1/cancelar`
+
+**Reglas:**
+
+- `PACIENTE`: solo sus propias reservas, y hasta el día anterior al turno (antes de las `00:00` del día del turno). Queda en estado `CANCELADA_PACIENTE`.
+- `ADMINISTRADOR`: cualquier reserva, hasta el momento en que empieza el turno. Queda en estado `CANCELADA_ADMIN`.
+
+**Respuesta `200 OK`:** la reserva actualizada, con el mismo formato que la respuesta de `POST /api/reservas`.
+
+**Errores** (además de los de token y rol):
+
+| Código | Mensaje | Cuándo |
+|---|---|---|
+| `400` | Error de validación | El `:id` de la URL no es un número |
+| `400` | `La reserva ya se encuentra cancelada.` | La reserva ya estaba cancelada |
+| `400` | `Fuera de término: Los pacientes solo pueden cancelar hasta el día anterior a la cita.` | Paciente cancelando el mismo día del turno o después |
+| `400` | `No se puede cancelar un turno cuya hora de inicio ya ha transcurrido.` | Administrador cancelando un turno que ya empezó |
+| `403` | `No tiene permisos para cancelar este turno.` | Paciente intentando cancelar una reserva de otro paciente |
+| `404` | `Reserva no encontrada.` | No existe una reserva con ese id |
+
+### Estados de una reserva
+
+| Estado | Significado |
+|---|---|
+| `PENDIENTE` | Reservada, todavía no atendida |
+| `ATENDIDO` | El médico la marcó como atendida |
+| `AUSENTE` | El médico marcó que el paciente no asistió |
+| `CANCELADA_PACIENTE` | Cancelada por el paciente |
+| `CANCELADA_ADMIN` | Cancelada por un administrador |
 
 ---
 
@@ -393,7 +640,7 @@ misTurnos(@UsuarioActual() usuario: UsuarioToken) {
 
 ### Usar datos de usuarios desde otro módulo
 
-`UsuariosModule` exporta `UsuariosService` (`findById`, `findByDocumento`). Para usarlo, importá `UsuariosModule` en tu módulo:
+`UsuariosModule` exporta `UsuariosService` (`findById`, `findByDocumento`). Para usarlo desde otro módulo del backend, importá `UsuariosModule` en tu módulo (desde el frontend se usa el endpoint `GET /api/usuarios?documento=...`):
 
 ```ts
 @Module({
@@ -411,13 +658,14 @@ La validación es **global y estricta** (`whitelist` + `forbidNonWhitelisted` + 
 - Cualquier campo que el cliente envíe y el DTO no declare se rechaza con `400`.
 - `transform: true` convierte los parámetros a los tipos del DTO (por ejemplo, un `id` de la URL a número).
 
-### Agregar datos al seed (ej.: tabla `medicos`)
+### Agregar datos al seed
 
-El seed está en `src/seed/`. Para cargar datos de otra tabla:
+El seed está en `src/seed/` y hoy carga `usuarios` y `medicos` (en ese orden). Para cargar datos de otra tabla:
 
-1. Registrá la entidad en `SeedModule`: `TypeOrmModule.forFeature([Usuario, Medico])`.
-2. Agregá un método en `SeedService` y llamalo en `onApplicationBootstrap()` **después** de `cargarUsuarios()`, ya que `medicos` necesita el `id_usuario`.
-3. Mantené el mismo criterio: **si ya existe, no insertarlo de nuevo** (idempotente).
+1. Registrá la entidad en `SeedModule`, dentro de `TypeOrmModule.forFeature([...])` (hoy: `[Usuario, Medico]`).
+2. Poné los datos en un archivo nuevo dentro de `src/seed/data/`.
+3. Agregá un método en `SeedService` y llamalo en `onApplicationBootstrap()` **después** de las tablas de las que dependa (por ejemplo, `medicos` se carga después de `usuarios` porque necesita el `id_usuario`).
+4. Mantené el mismo criterio: **si ya existe, no insertarlo de nuevo** (idempotente).
 
 ---
 
@@ -476,18 +724,34 @@ src/
 │   ├── auth.controller.ts         → POST /auth/login, GET /auth/perfil
 │   ├── auth.module.ts             → Configuración del JWT y registro de los guards
 │   └── auth.service.ts            → Lógica de login y perfil
+├── medicos/                       → Médicos y valor de la consulta
+│   ├── dto/                       → UpdateValorConsultaDto (entrada), MedicoResponseDto (salida)
+│   ├── entities/medico.entity.ts  → Tabla medicos (1:1 con usuarios), matrícula y valor_consulta
+│   ├── medicos.controller.ts      → GET /medicos, PATCH /medicos/:id/valor-consulta
+│   ├── medicos.module.ts          → Exporta MedicosService
+│   └── medicos.service.ts         → listar, actualizarValorConsulta, existeMedicoActivo, obtenerValorActual
+├── reservas/                      → Turnos y reglas de negocio
+│   ├── dto/                       → CrearReservaDto (entrada), ReservaResponseDto (salida)
+│   ├── entities/reserva.entity.ts → Tabla reservas, con valor_congelado
+│   ├── enums/                     → EstadoReserva (PENDIENTE, ATENDIDO, AUSENTE, CANCELADA_PACIENTE, CANCELADA_ADMIN)
+│   ├── reservas.controller.ts     → POST /reservas, GET /reservas, PATCH /reservas/:id/cancelar
+│   ├── reservas.module.ts         → Exporta ReservasService
+│   └── reservas.service.ts        → crear (validaciones), cancelar (por rol), listarPorUsuario
 ├── seed/                          → Carga automática de datos de prueba
+│   ├── data/medicos.data.ts       → Los 5 médicos activos (matrícula y valor de consulta)
 │   ├── data/usuarios.data.ts      → Los 21 usuarios de prueba
 │   ├── seed.module.ts
 │   └── seed.service.ts            → Se ejecuta al arrancar si DB_SEED=true
 ├── usuarios/                      → Usuarios (solo consulta; el ABM es de otro equipo)
+│   ├── dto/                       → BuscarUsuarioDto (entrada), UsuarioResponseDto (salida, sin clave)
 │   ├── entities/usuario.entity.ts → Tabla usuarios, según el modelo de la consigna
 │   ├── enums/                     → EstadoUsuario (ACTIVO, BAJA), RolUsuario (MEDICO, PACIENTE, ADMINISTRADOR)
+│   ├── usuarios.controller.ts     → GET /usuarios?documento=...
 │   ├── usuarios.module.ts         → Exporta UsuariosService
 │   └── usuarios.service.ts        → findById, findByDocumento
 ├── app.controller.ts              → GET /api (chequeo, público)
 ├── app.module.ts                  → Módulo raíz: configuración, conexión a la base y módulos
-└── main.ts                        → Arranque: prefijo /api, validación global, puerto
+└── main.ts                        → Arranque: prefijo /api, validación global, Swagger, puerto
 ```
 
 Cada funcionalidad nueva va en **su propia carpeta** dentro de `src/` (por ejemplo `src/medicos/`, `src/reservas/`), con su módulo, entidad, DTOs, servicio y controlador, y se registra en `imports` de `app.module.ts`. Las entidades se cargan solas (`autoLoadEntities`) con solo registrarlas en `TypeOrmModule.forFeature([...])` de su módulo.
