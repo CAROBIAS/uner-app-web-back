@@ -25,18 +25,19 @@ import { ReservasModule } from './reservas/reservas.module';
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: true,
         synchronize: config.get<string>('DB_SYNC') === 'true',
-        ssl: {
-          rejectUnauthorized: false,
-        },
+        ssl:
+          config.get<string>('DB_SSL') === 'true'
+            ? { rejectUnauthorized: false }
+            : false,
       }),
     }),
     UsuariosModule,
     SeedModule,
     AuthModule,
-    MedicosModule, 
+    MedicosModule,
     ReservasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
