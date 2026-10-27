@@ -80,4 +80,11 @@ export class MedicosService {
     }
     return medico.valor_consulta;
   }
+
+  async obtenerPorUsuarioId(idUsuario: number): Promise<Medico | null> {
+    return this.medicosRepository.findOne({
+      where: { usuario: { id: idUsuario } },
+      relations: { usuario: true },
+    });
+  }
 }

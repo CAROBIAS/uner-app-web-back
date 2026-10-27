@@ -9,6 +9,8 @@ import { MedicosService } from '../medicos/medicos.service';
 import { RolUsuario } from '../usuarios/enums/rol-usuario.enum';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { EstadoUsuario } from '../usuarios/enums/estado-usuario.enum';
+import { AgendaTurnoDto } from './dto/agenda-turno.dto';
+import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 
 @Injectable()
 export class ReservasService {
@@ -18,7 +20,7 @@ export class ReservasService {
     @InjectRepository(Usuario)
     private readonly usuariosRepository: Repository<Usuario>,
     private readonly medicosService: MedicosService,
-  ) {}
+  ) { }
 
   private mapearARespuesta(r: Reserva): ReservaResponseDto {
     const dto = new ReservaResponseDto();
@@ -216,5 +218,73 @@ export class ReservasService {
     reserva.estado = EstadoReserva.CANCELADO;
     const actualizada = await this.reservasRepository.save(reserva);
     return this.mapearARespuesta(actualizada);
+  }
+
+  async obtenerAgenda(
+    usuarioId: number,
+    fecha: string,
+  ): Promise<AgendaTurnoDto[]> {
+    const medico = await this.medicosService.obtenerPorUsuarioId(usuarioId);
+    if (!medico) {
+      throw new ForbiddenException('El usuario autenticado no es un médico.');
+    }
+
+    const [year, month, day] = fecha.split('-').map(Number);
+    const inicioDia = new Date(year, month - 1, day, 0, 0, 0);
+    const finDia = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+    const reservas = await this.reservasRepository.find({
+      where: {
+        medico: { id: medico.id },
+        fecha_hora: Between(inicioDia, finDia),
+      },
+      relations: { paciente: true },
+      order: { fecha_hora: 'ASC' },
+    });
+
+    return reservas.map((r) => this.mapearAAgenda(r));
+  }
+
+  async cambiarEstado(
+    idReserva: number,
+    usuarioId: number,
+    dto: CambiarEstadoDto,
+  ): Promise<AgendaTurnoDto> {
+    const medico = await this.medicosService.obtenerPorUsuarioId(usuarioId);
+    if (!medico) {
+      throw new ForbiddenException('El usuario autenticado no es un médico.');
+    }
+
+    const reserva = await this.reservasRepository.findOne({
+      where: { id: idReserva },
+      relations: { medico: true, paciente: true },
+    });
+    if (!reserva) {
+      throw new NotFoundException('Reserva no encontrada.');
+    }
+    if (reserva.medico.id !== medico.id) {
+      throw new ForbiddenException('No puede modificar turnos de otro médico.');
+    }
+    if (reserva.estado !== EstadoReserva.ACTIVO) {
+      throw new BadRequestException(
+        'Solo se pueden marcar turnos en estado ACTIVO.',
+      );
+    }
+
+    reserva.estado = dto.estado;
+    const actualizada = await this.reservasRepository.save(reserva);
+    return this.mapearAAgenda(actualizada);
+  }
+
+  private mapearAAgenda(r: Reserva): AgendaTurnoDto {
+    const dto = new AgendaTurnoDto();
+    dto.id = r.id;
+    dto.fecha_hora = r.fecha_hora;
+    dto.estado = r.estado;
+    dto.valor_consulta = r.valor_consulta;
+    dto.id_paciente = r.paciente?.id;
+    dto.paciente_nombres = r.paciente?.nombres;
+    dto.paciente_apellidos = r.paciente?.apellidos;
+    return dto;
   }
 }
