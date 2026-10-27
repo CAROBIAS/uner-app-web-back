@@ -16,6 +16,9 @@ import { RolUsuario } from '../usuarios/enums/rol-usuario.enum';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { CrearReservaDto } from './dto/crear-reserva.dto';
 import { ReservaResponseDto } from './dto/reserva-response.dto';
+import { AgendaQueryDto } from './dto/agenda-query.dto';
+import { AgendaTurnoDto } from './dto/agenda-turno.dto';
+import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 import { ReservasService } from './reservas.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -25,7 +28,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('reservas')
 export class ReservasController {
-  constructor(private readonly reservasService: ReservasService) {}
+  constructor(private readonly reservasService: ReservasService) { }
 
   @ApiOkResponse({ type: String, isArray: true })
   @Roles(RolUsuario.PACIENTE, RolUsuario.ADMINISTRADOR)
@@ -63,5 +66,27 @@ export class ReservasController {
     @UsuarioActual() usuario: Usuario,
   ): Promise<ReservaResponseDto> {
     return this.reservasService.cancelar(id, usuario);
+  }
+
+  @ApiOkResponse({ type: AgendaTurnoDto, isArray: true })
+  @Roles(RolUsuario.MEDICO)
+  @Get('agenda')
+  @ApiQuery({ name: 'fecha', type: String, example: '2026-10-26' })
+  obtenerAgenda(
+    @Query() query: AgendaQueryDto,
+    @UsuarioActual() usuario: Usuario,
+  ): Promise<AgendaTurnoDto[]> {
+    return this.reservasService.obtenerAgenda(usuario.id, query.fecha);
+  }
+
+  @ApiOkResponse({ type: AgendaTurnoDto })
+  @Roles(RolUsuario.MEDICO)
+  @Patch(':id/estado')
+  cambiarEstado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CambiarEstadoDto,
+    @UsuarioActual() usuario: Usuario,
+  ): Promise<AgendaTurnoDto> {
+    return this.reservasService.cambiarEstado(id, usuario.id, dto);
   }
 }
