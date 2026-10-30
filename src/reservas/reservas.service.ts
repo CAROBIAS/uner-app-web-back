@@ -22,17 +22,6 @@ export class ReservasService {
     private readonly medicosService: MedicosService,
   ) { }
 
-  private mapearARespuesta(r: Reserva): ReservaResponseDto {
-    const dto = new ReservaResponseDto();
-    dto.id = r.id;
-    dto.id_medico = r.medico?.id;
-    dto.id_paciente = r.paciente?.id;
-    dto.fecha_hora = r.fecha_hora;
-    dto.estado = r.estado;
-    dto.valor_consulta = r.valor_consulta;
-    return dto;
-  }
-
   async crear(crearReservaDto: CrearReservaDto, usuarioActual: Usuario): Promise<ReservaResponseDto> {
     const { id_medico, fecha_hora, id_paciente } = crearReservaDto;
     const fechaCita = new Date(fecha_hora);
@@ -285,6 +274,44 @@ export class ReservasService {
     dto.id_paciente = r.paciente?.id;
     dto.paciente_nombres = r.paciente?.nombres;
     dto.paciente_apellidos = r.paciente?.apellidos;
+
+    return dto;
+  }
+  // Mapeos a DTO:
+
+  private mapearARespuesta(reserva: Reserva): ReservaResponseDto {
+    const dto = new ReservaResponseDto();
+
+    dto.id = reserva.id;
+    dto.estado = reserva.estado;
+    dto.fecha_hora = reserva.fecha_hora;
+    dto.valor_consulta = reserva.valor_consulta;
+
+    // Mapear el objeto anidado del paciente
+    if (reserva.paciente) {
+      dto.paciente = {
+        id: reserva.paciente.id,
+        documento: reserva.paciente.documento,
+        nombres: reserva.paciente.nombres,
+        apellidos: reserva.paciente.apellidos,
+        email: reserva.paciente.email,
+      };
+    }
+
+    // Mapear el objeto anidado del médico
+    if (reserva.medico) {
+      // Si tu entidad Medico extiende de Usuario o tiene la relación apuntando a la tabla usuarios:
+      const infoMedico = reserva.medico.usuario || reserva.medico; 
+      
+      dto.medico = {
+        id: reserva.medico.id,
+        documento: infoMedico?.documento,
+        nombres: infoMedico?.nombres,
+        apellidos: infoMedico?.apellidos,
+        email: infoMedico?.email,
+      };
+    }
+
     return dto;
   }
 }
