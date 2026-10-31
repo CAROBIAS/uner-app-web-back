@@ -11,6 +11,7 @@ import { Usuario } from '../usuarios/entities/usuario.entity';
 import { EstadoUsuario } from '../usuarios/enums/estado-usuario.enum';
 import { AgendaTurnoDto } from './dto/agenda-turno.dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
+import { Medico } from '../medicos/entities/medico.entity';
 
 @Injectable()
 export class ReservasService {
@@ -231,7 +232,7 @@ export class ReservasService {
       order: { fecha_hora: 'ASC' },
     });
 
-    return reservas.map((r) => this.mapearAAgenda(r));
+    return reservas.map((r) => this.mapearAAgenda(r, medico));
   }
 
   async cambiarEstado(
@@ -262,10 +263,10 @@ export class ReservasService {
 
     reserva.estado = dto.estado;
     const actualizada = await this.reservasRepository.save(reserva);
-    return this.mapearAAgenda(actualizada);
+    return this.mapearAAgenda(actualizada, medico);
   }
 
-  private mapearAAgenda(r: Reserva): AgendaTurnoDto {
+  private mapearAAgenda(r: Reserva, medico: Medico): AgendaTurnoDto {
     const dto = new AgendaTurnoDto();
     dto.id = r.id;
     dto.fecha_hora = r.fecha_hora;
@@ -274,6 +275,22 @@ export class ReservasService {
     dto.id_paciente = r.paciente?.id;
     dto.paciente_nombres = r.paciente?.nombres;
     dto.paciente_apellidos = r.paciente?.apellidos;
+
+    dto.paciente = {
+      id: r.paciente.id,
+      documento: r.paciente.documento,
+      nombres: r.paciente.nombres,
+      apellidos: r.paciente.apellidos,
+      email: r.paciente.email,
+    };
+
+    dto.medico = {
+      id: medico.id,
+      documento: medico.usuario.documento,
+      nombres: medico.usuario.nombres,
+      apellidos: medico.usuario.apellidos,
+      email: medico.usuario.email,
+    };
 
     return dto;
   }
@@ -301,8 +318,8 @@ export class ReservasService {
     // Mapear el objeto anidado del médico
     if (reserva.medico) {
       // Si tu entidad Medico extiende de Usuario o tiene la relación apuntando a la tabla usuarios:
-      const infoMedico = reserva.medico.usuario || reserva.medico; 
-      
+      const infoMedico = reserva.medico.usuario || reserva.medico;
+
       dto.medico = {
         id: reserva.medico.id,
         documento: infoMedico?.documento,
