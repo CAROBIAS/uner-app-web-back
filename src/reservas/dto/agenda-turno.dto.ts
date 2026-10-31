@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { EstadoReserva } from '../enums/estado-reserva.enum';
+import { UsuarioBaseDto } from './usuario-base.dto';
 
 export class AgendaTurnoDto {
   @ApiProperty({ example: 1 })
@@ -22,4 +23,10 @@ export class AgendaTurnoDto {
 
   @ApiProperty({ example: 'Rodríguez' })
   paciente_apellidos: string;
+
+  @ApiProperty({ type: UsuarioBaseDto })
+  paciente: UsuarioBaseDto;
+
+  @ApiProperty({ type: UsuarioBaseDto })
+  medico: UsuarioBaseDto;
 }
