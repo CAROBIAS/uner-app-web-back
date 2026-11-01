@@ -50,6 +50,7 @@ export class ReservasController {
   }
 
   @ApiOkResponse({ type: ReservaResponseDto, isArray: true })
+  @Roles(RolUsuario.PACIENTE, RolUsuario.ADMINISTRADOR)
   @Get()
   listar(@UsuarioActual() usuario: Usuario): Promise<ReservaResponseDto[]> {
     return this.reservasService.listarPorUsuario(usuario);

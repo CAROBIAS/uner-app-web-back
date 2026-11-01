@@ -104,7 +104,12 @@ export class ReservasService {
     });
 
     const guardada = await this.reservasRepository.save(nuevaReserva);
-    return this.mapearARespuesta(guardada);
+
+    const completa = await this.reservasRepository.findOneOrFail({
+      where: { id: guardada.id },
+      relations: { medico: { usuario: true }, paciente: true },
+    });
+    return this.mapearARespuesta(completa);
   }
 
   async listarPorUsuario(usuarioActual: Usuario): Promise<ReservaResponseDto[]> {
@@ -178,7 +183,7 @@ export class ReservasService {
   async cancelar(idReserva: number, usuarioActual: Usuario): Promise<ReservaResponseDto> {
     const reserva = await this.reservasRepository.findOne({
       where: { id: idReserva },
-      relations: ['paciente', 'medico'],
+      relations: { paciente: true, medico: { usuario: true } },
     });
 
     if (!reserva) {
